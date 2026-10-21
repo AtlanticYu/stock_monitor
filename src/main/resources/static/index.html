@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" type="image/png" href="./assets/app-icon.png" />
+    <title>多市场股票分析工作台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-mark" src="./assets/app-icon.png" width="34" height="34" alt="行情工作台图标" />
+          <div><h1>行情工作台</h1></div>
+        </div>
+        <div class="topbar-actions">
+          <span class="connection-badge" role="status"><span id="connection-dot" class="connection-dot connecting" aria-hidden="true"></span><span id="connection-label">连接中</span></span>
+          <button onclick="StockPlatform.logout()" class="text-button">退出登录</button><button id="open-page" class="secondary-button page-toggle" aria-expanded="false" aria-controls="web-panel" disabled>展开网页 →</button>
+        </div>
+      </header>
+
+      <div class="workspace-shell">
+        <aside class="instrument-sidebar" aria-label="自选股票列表">
+          <div class="sidebar-heading"><div><span class="eyebrow">WATCHLIST</span><h2>自选股票</h2></div><button id="add-instrument" class="icon-button" title="添加股票">＋</button></div>
+          <input id="instrument-search" class="search-input" placeholder="搜索名称或代码" aria-label="搜索股票" />
+          <div id="instrument-list" class="instrument-list"><div class="empty-state">正在加载自选股票…</div></div>
+          <div class="sidebar-foot"><span id="database-status">MySQL 数据库</span><button id="open-settings" class="text-button">设置</button></div>
+        </aside>
+        <div class="workspace">
+        <section class="quote-card" aria-label="当前股票最新报价">
+          <div class="instrument">
+            <div class="instrument-heading"><h2 class="stock-name">待选择股票</h2><span id="market-status" class="market-badge">等待行情</span></div>
+            <div class="stock-code"><span>--</span><span class="stock-divider"></span><span>香港交易所</span><span class="currency-label">港元</span></div>
+            <div class="timestamp" id="market-time">行情时间：等待服务端数据</div>
+          </div>
+          <div class="quote-numbers">
+            <div class="price-line"><span class="price" id="price">--</span><span class="price-currency">HKD</span></div>
+            <div class="quote-change"><span id="increase">涨跌 --</span><span id="ratio">--</span></div>
+            <div class="timestamp" id="received-at">等待行情数据…</div>
+          </div>
+        </section>
+
+        <section class="chart-panel" aria-label="本地行情图表">
+          <div class="chart-heading"><div class="chart-title"><h2>价格走势 · <span id="chart-instrument-name">待选择股票</span></h2><span class="local-label">浏览器渲染</span></div><div class="chart-heading-actions"><span id="chart-source" class="source-badge">等待数据</span><button id="toggle-chart-panel" class="secondary-button panel-toggle panel-toggle-chart" type="button" aria-expanded="true" aria-controls="chart-panel-body">收起价格走势 ↑</button></div></div>
+          <div class="chart-controls">
+            <div class="chart-toolbar-left">
+              <div class="period-tabs" role="group" aria-label="图表周期">
+                <button data-period="intraday" aria-pressed="false">分时</button>
+                <button data-period="day" aria-pressed="true">日 K</button>
+                <button data-period="week" aria-pressed="false">周 K</button>
+                <button data-period="month" aria-pressed="false">月 K</button>
+                <button data-period="year" aria-pressed="false">年 K</button>
+              </div>
+            </div>
+            <div class="chart-period-actions"><select id="chart-type" aria-label="图表样式"><option value="candles">蜡烛图</option><option value="line">收盘折线</option></select><button id="chart-refresh" class="secondary-button" title="先读取缓存，再请求服务端采集">刷新数据</button></div>
+          </div>
+          <div id="chart-panel-body" class="chart-panel-body">
+            <div class="chart-options">
+              <div class="ma-options" role="group" aria-label="移动平均线"><span class="options-label">均线</span><label class="ma5"><input type="checkbox" data-ma="0" checked> MA5</label><label class="ma10"><input type="checkbox" data-ma="1" checked> MA10</label><label class="ma20"><input type="checkbox" data-ma="2" checked> MA20</label></div>
+              <span class="chart-colors"><i class="up-key"></i>涨<i class="down-key"></i>跌</span>
+              <div class="zoom-controls" role="group" aria-label="图表视野"><button id="chart-zoom-out" aria-label="缩小" title="缩小">−</button><button id="chart-zoom-in" aria-label="放大" title="放大">＋</button><button id="chart-reset" title="回到最新数据">复位</button></div>
+            </div>
+            <div class="chart-market-layout">
+              <div class="chart-visual-pane">
+                <div id="chart-details" class="chart-details" aria-live="off">开 --　高 --　低 --　收 --　量 --</div>
+                <div class="chart-stage"><canvas id="stock-chart" tabindex="0" aria-label="股票图表：拖动平移，方向键移动，下方可查看表格数据"></canvas></div>
+                <div class="chart-caption"><span id="chart-status" role="status">准备加载</span><span class="interaction-hint">拖动平移 · 双击复位</span></div>
+                <p id="chart-warning" class="chart-warning" role="status" hidden></p>
+                <div class="chart-disclosures">
+              <details class="source-details"><summary>数据来源与缓存<span class="disclosure-note">查看口径、范围与保存位置</span></summary><p id="chart-meta" class="chart-meta"></p></details>
+              <details class="chart-data"><summary>数据明细<span class="disclosure-note">最近 30 条 · 自动采集缓存</span></summary>
+                <div class="chart-import"><span class="muted-text">当前股票 · 同一复权口径 · 自动采集并缓存</span></div>
+                <div class="table-scroll"><table><caption class="sr-only">当前周期最近 30 条行情数据</caption><thead><tr><th scope="col">时间</th><th scope="col">开</th><th scope="col">高</th><th scope="col">低</th><th scope="col">收</th><th scope="col">量</th></tr></thead><tbody id="chart-table-body"></tbody></table></div>
+              </details>
+                </div>
+              </div>
+              <aside id="market-detail-panel" class="market-detail-panel" aria-label="百度盘口与分笔成交" hidden data-intraday-only="true">
+                <section class="market-detail-section order-book-panel" aria-labelledby="order-book-title">
+                  <div class="market-detail-heading"><h3 id="order-book-title">买卖数据</h3><span id="order-book-updated" class="market-detail-updated">等待数据</span></div>
+                  <div class="order-book-table" role="table" aria-label="五档买卖盘"><div class="order-book-row order-book-header" role="row"><span>档位</span><span>价格</span><span>数量</span></div><div id="order-book-list"><div class="market-detail-empty">百度暂未返回盘口数据</div></div></div>
+                </section>
+                <section class="market-detail-section tick-trades-panel" aria-labelledby="tick-trades-title">
+                  <div class="market-detail-heading"><h3 id="tick-trades-title">分笔成交</h3><span id="tick-trades-updated" class="market-detail-updated">等待数据</span></div>
+                  <div class="tick-trades-table" role="table" aria-label="分笔成交记录"><div class="tick-trade-row tick-trade-header" role="row"><span>时间</span><span>价格</span><span>数量</span><span>方向</span></div><div id="tick-trades-list"><div class="market-detail-empty">百度暂未返回分笔成交</div></div></div>
+                </section>
+              </aside>
+            </div>
+          </div>
+        </section>
+
+        <section id="analysis-panel" class="analysis-panel" aria-labelledby="analysis-panel-title">
+          <div class="analysis-panel-heading"><div class="analysis-title-wrap"><span class="eyebrow">RESEARCH</span><div class="analysis-title-line"><h2 id="analysis-panel-title">指标分析 · <span id="analysis-instrument-label">待选择股票</span></h2></div></div><div class="analysis-panel-actions"><button id="calculate-analysis" class="secondary-button">刷新指标</button><button id="toggle-indicator-panel" class="secondary-button panel-toggle panel-toggle-indicator" type="button" aria-expanded="true" aria-controls="indicator-panel">收起指标 ↑</button><div class="color-legend-anchor"><button id="color-legend-trigger" class="color-legend-trigger" type="button" aria-label="查看指标颜色图例" title="查看指标颜色图例" aria-expanded="false" aria-controls="color-legend-popover">
+  <svg class="color-legend-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <rect x="3.5" y="4" width="17" height="16" rx="4" class="legend-icon-frame"></rect>
+    <circle cx="7.5" cy="8.5" r="1.35" class="legend-icon-up"></circle><path d="M11.5 8.5h5" class="legend-icon-line"></path>
+    <circle cx="7.5" cy="12" r="1.35" class="legend-icon-down"></circle><path d="M11.5 12h5" class="legend-icon-line"></path>
+    <circle cx="7.5" cy="15.5" r="1.35" class="legend-icon-warning"></circle><path d="M11.5 15.5h5" class="legend-icon-line"></path>
+  </svg>
+</button><div id="color-legend-popover" class="color-legend-popover" role="tooltip"><div class="color-legend-title">颜色含义</div><div class="color-legend-note">方向色会根据市场规则变化：A 股/港股红涨绿跌，美股绿涨红跌。</div><div class="color-legend-grid"><span><i class="legend-dot legend-up"></i><b>正向</b><small>偏强、增强、流入、突破</small></span><span><i class="legend-dot legend-down"></i><b>负向</b><small>偏弱、减弱、流出、跌破</small></span><span><i class="legend-dot legend-warning"></i><b>风险</b><small>超买、背离、高波动</small></span><span><i class="legend-dot legend-neutral"></i><b>中性</b><small>持平、样本不足、缺少方向</small></span><span><i class="legend-dot legend-error"></i><b>异常</b><small>数据或连接异常</small></span></div></div></div></div></div>
+          <p id="analysis-panel-status" class="analysis-panel-status" role="status" aria-live="polite">等待读取指标数据…</p>
+          <div id="live-analysis-summary" class="live-analysis-summary" aria-live="polite">
+            <div class="analysis-score-card">
+              <div class="score-ring" id="analysis-score-ring"><strong id="analysis-score">--</strong><small>综合评分</small></div>
+              <div class="score-copy"><b id="analysis-signal">等待分析</b><span id="analysis-recommendation">研究建议：--</span><small id="analysis-updated">更新时间：--</small></div>
+            </div>
+            <div class="analysis-state-grid" aria-label="实时分析状态">
+              <div><small>趋势</small><b id="analysis-trend">--</b></div>
+              <div><small>动量</small><b id="analysis-momentum">--</b></div>
+              <div><small>波动</small><b id="analysis-volatility">--</b></div>
+              <div><small>成交量</small><b id="analysis-volume">--</b></div>
+            </div>
+            <div class="analysis-live-meta"><span id="analysis-source" class="source-badge">等待数据</span><span id="analysis-period">分时 + 日线</span><span id="analysis-levels">支撑/阻力 --</span><span id="analysis-confidence">可信度 --</span><span id="analysis-quality">数据质量：--</span><span class="risk-state-anchor">
+  <button id="analysis-risk-label" class="risk-state risk-state-trigger" type="button" aria-expanded="false" aria-controls="analysis-risk-tooltip">风险：--</button>
+  <span id="analysis-risk-tooltip" class="risk-tooltip" role="tooltip" aria-hidden="true">等待风险分析</span>
+</span></div>
+          </div>
+          <div id="indicator-panel" class="indicator-panel-content">
+            <section class="indicator-section" aria-labelledby="technical-indicator-title">
+              <div class="indicator-section-heading"><h3 id="technical-indicator-title">技术指标</h3><span id="indicator-count" class="indicator-count">等待数据</span></div>
+              <div id="indicator-list" class="indicator-list"></div>
+            </section>
+            <section class="indicator-section" aria-labelledby="composite-indicator-title">
+              <div class="indicator-section-heading"><h3 id="composite-indicator-title">复合分析</h3><span id="composite-count" class="indicator-count">等待数据</span></div>
+              <div id="composite-indicator-list" class="indicator-list composite-indicator-list"></div>
+            </section>
+          </div>
+        </section>
+        <section id="backtest-panel" class="aux-panel backtest-panel" aria-labelledby="backtest-title">
+          <div class="aux-heading"><div><span class="eyebrow">QUANT RESEARCH</span><h2 id="backtest-title">量化回测</h2><p class="backtest-subtitle">仅使用本地 数据库日 K · 研究模式，不执行真实交易</p></div><div class="backtest-actions"><button id="run-backtest" class="secondary-button">当前股票回测</button><button id="scan-strategy-parameters" class="secondary-button">扫描策略参数</button><button id="run-batch-backtest" class="primary-button">筛选全部股票</button></div></div>
+          <div class="research-mode-switch" role="tablist" aria-label="研究模式">
+            <button type="button" class="research-mode-button is-active" data-research-mode="single">单股票回测</button>
+            <button type="button" class="research-mode-button" data-research-mode="portfolio">组合研究</button>
+            <button type="button" class="research-mode-button" data-research-mode="validation">数据校验</button>
+          </div>
+          <section id="portfolio-research-panel" class="portfolio-research-panel" hidden aria-labelledby="portfolio-research-title">
+            <div class="research-form-grid">
+              <label>研究币种<select id="research-currency"><option value="">跟随当前股票</option><option value="CNY">人民币 CNY</option><option value="HKD">港币 HKD</option><option value="USD">美元 USD</option></select></label>
+              <label>初始资金<input id="research-initial-capital" type="number" value="100000" min="1" step="1000" /></label>
+              <label>目标持仓<input id="research-target-holdings" type="number" value="5" min="1" max="50" step="1" /></label>
+              <label>单股最大权重<input id="research-max-weight" type="number" value="0.2" min="0.01" max="1" step="0.01" /></label>
+              <label>再平衡周期<select id="research-rebalance"><option value="daily">每日</option><option value="monthly" selected>每月</option><option value="weekly">每周</option><option value="quarterly">每季</option></select></label>
+              <label>价格口径<select id="research-price-basis"><option value="unknown">当前来源口径（未确认复权）</option><option value="raw">原始价格</option><option value="qfq">前复权</option><option value="hfq">后复权</option></select></label>
+              <label>基准指数/股票<select id="research-benchmark"><option value="">不设置基准</option></select></label>
+              <label>开始日期<input id="research-start-date" type="date" /></label>
+              <label>结束日期<input id="research-end-date" type="date" /></label>
+              <label>最少交易日<input id="research-min-samples" type="number" value="120" min="40" step="1" /></label>
+              <label>最大成交量参与率<input id="research-participation" type="number" value="0.1" min="0.01" max="1" step="0.01" /><small>默认 10%，避免假设一次吃完全部成交量</small></label>
+              <label class="research-check"><input id="research-enforce-price-limit" type="checkbox" checked />执行价格限制</label>
+              <label class="research-check"><input id="research-allow-fractional" type="checkbox" />允许碎股（市场支持时）</label>
+            </div>
+            <div class="factor-weight-grid" aria-label="因子权重">
+              <label>趋势 <input id="research-trend-weight" type="number" value="0.3" min="0" max="1" step="0.05" /></label>
+              <label>动量 <input id="research-momentum-weight" type="number" value="0.3" min="0" max="1" step="0.05" /></label>
+              <label>波动风险 <input id="research-volatility-weight" type="number" value="0.2" min="0" max="1" step="0.05" /></label>
+              <label>流动性 <input id="research-liquidity-weight" type="number" value="0.1" min="0" max="1" step="0.05" /></label>
+              <label>量价确认 <input id="research-volume-weight" type="number" value="0.1" min="0" max="1" step="0.05" /></label>
+            </div>
+            <div class="research-actions"><button id="run-portfolio-research" type="button" class="primary-button">运行组合研究</button><button id="validate-research-data" type="button" class="secondary-button">校验研究数据</button><button id="refresh-research-source" type="button" class="secondary-button">刷新行情数据</button></div>
+            <p class="form-hint">数据源优先使用服务端采集并写入 MySQL；按 60% / 20% / 20% 展示预设策略的区间表现，分段不代表拟合或样本外验证；只做多、不加杠杆，信号在收盘形成并按下一交易日开盘模拟成交。</p>
+            <div id="portfolio-research-status" class="form-hint" role="status" aria-live="polite">未运行组合研究。</div>
+            <div id="portfolio-research-result" class="portfolio-research-result"><span class="muted-text">组合研究结果将在这里显示。</span></div>
+          </section>
+          <div class="backtest-form">
+            <label>策略<select id="strategy-select"><option value="ma">均线交叉</option><option value="macd">MACD</option><option value="rsi">RSI</option><option value="bollinger">布林带</option></select></label>
+            <label>初始资金<input id="initial-capital" type="number" value="100000" min="1" step="1000" /></label>
+            <label>最大仓位<input id="max-position" type="number" value="1" min="0.01" max="1" step="0.05" /></label>
+            <label>开始日期<input id="backtest-start-date" type="date" /></label><label>结束日期<input id="backtest-end-date" type="date" /></label>
+            <label>最少日 K 样本<input id="backtest-min-samples" type="number" value="40" min="20" max="20000" step="1" /></label><label>最少完成交易<input id="backtest-min-trades" type="number" value="5" min="0" max="10000" step="1" /></label>
+          </div>
+          <div id="strategy-parameters" class="strategy-parameters" aria-live="polite"></div>
+          <details class="backtest-advanced"><summary>高级交易成本与市场规则</summary><div class="backtest-form backtest-cost-form"><label>手续费率<input id="backtest-commission" type="number" min="0" step="0.0001" placeholder="市场默认" /></label><label>印花税率<input id="backtest-stamp-duty" type="number" min="0" step="0.0001" placeholder="市场默认" /></label><label>滑点率<input id="backtest-slippage" type="number" min="0" step="0.0001" placeholder="市场默认" /></label><label class="settings-check"><input id="backtest-enforce-limit" type="checkbox" checked /> 启用价格限制</label><label class="settings-check"><input id="backtest-fractional" type="checkbox" /> 允许碎股</label></div></details>
+          <p id="backtest-status" class="form-hint" role="status" aria-live="polite">数据源：数据库日 K；日期为空时使用全部已存数据。</p>
+          <div id="backtest-result" class="backtest-result">当前未运行回测。历史平仓胜率仅描述历史样本，不代表未来收益概率。</div>
+          <section id="strategy-scan-result" class="batch-backtest-result" aria-live="polite" hidden></section>
+          <section id="batch-backtest-result" class="batch-backtest-result" aria-live="polite"><p class="muted-text">点击“筛选全部股票”，按相同策略比较已添加股票的历史日 K 表现。</p></section>
+          <section id="backtest-history" class="backtest-history" aria-labelledby="backtest-history-title"><div class="backtest-history-heading"><h3 id="backtest-history-title">历史回测记录</h3><span id="backtest-history-status" class="muted-text">切换股票后自动加载最近 10 次</span><button id="compare-backtests" class="secondary-button" type="button" disabled>对比所选结果</button></div><div id="backtest-history-list" class="backtest-history-list"><span class="muted-text">暂无历史回测记录</span></div><div id="backtest-comparison" class="backtest-comparison" hidden></div></section>
+        </section>
+        <section class="service-status" aria-label="行情连接详情"><span class="service-label">行情连接</span><span id="status-text" class="status-text" role="status">正在启动行情监听…</span><span id="data-health-label" class="data-health-label">数据健康：等待</span></section>
+        <dialog id="settings-dialog" class="settings-dialog"><form method="dialog" id="settings-form"><div class="dialog-heading"><div><span class="eyebrow">SETTINGS</span><h2 id="settings-title">股票设置</h2></div><button type="button" id="settings-close" class="icon-button" aria-label="关闭">×</button></div><div class="settings-grid"><label>百度股票页面 URL<input id="settings-url" required placeholder="ab-688825 或 https://finance.baidu.com/stock/us-aapl" /></label><label>显示名称<input id="settings-name" placeholder="可选" /></label><label class="settings-check"><input id="settings-enabled" type="checkbox" checked /> 启用股票</label></div><p id="settings-hint" class="form-hint">保存时识别市场、代码和币种；显示名称可自行填写。</p><p id="name-preview-status" class="form-hint" role="status" aria-live="polite"></p><div class="dialog-actions"><button type="button" id="settings-cancel" class="secondary-button">取消</button><button type="submit" class="primary-button">保存股票</button></div></form></dialog>
+        <dialog id="data-dialog" class="settings-dialog"><form method="dialog" id="data-form"><div class="dialog-heading"><div><span class="eyebrow">DATA</span><h2>数据库设置</h2></div><button type="button" id="data-close" class="icon-button" aria-label="关闭">×</button></div><p id="db-path-label" class="muted-text"></p><label>恢复备份文件<input id="data-path" type="file" accept=".json,application/json" /></label><p class="form-hint">备份将下载到浏览器；恢复会替换数据库业务数据，并在服务端自动保存恢复前的备份。</p><label>导入行情 JSON<input id="series-file" type="file" accept=".json,application/json" /></label><button id="import-series" class="secondary-button" type="button">导入当前股票行情</button><button id="export-series" class="secondary-button" type="button">导出当前股票行情</button><p class="form-hint">行情 JSON 格式：{ "period": "day", "adjustment": "raw", "bars": [{ "time": 1700000000, "open": 10, "high": 12, "low": 9, "close": 11, "volume": 1000 }] }，time 使用 Unix 秒。</p><label>数据保留天数<input id="retention-days" type="number" min="1" max="3650" value="365" /></label>
+          <fieldset class="settings-fieldset"><legend>实时提醒规则 · 当前股票</legend><label class="settings-check"><input id="alert-enabled" type="checkbox" checked /> 启用应用内提醒</label><div class="settings-grid settings-grid-compact"><label>冷却时间（秒）<input id="alert-cooldown" type="number" min="60" max="86400" step="60" value="900" /></label><label>成交量倍数<input id="alert-volume-multiple" type="number" min="1" max="20" step="0.1" value="1.0" title="当前周期成交量达到近期均量的多少倍时触发提醒" /></label><label>评分变化阈值<input id="alert-score-threshold" type="number" min="1" max="100" step="0.5" value="10" /></label><label>RSI 超买线<input id="alert-rsi-overbought" type="number" min="50" max="100" step="1" value="70" /></label><label>RSI 超卖线<input id="alert-rsi-oversold" type="number" min="0" max="50" step="1" value="30" /></label></div><div class="dialog-actions"><button type="button" id="save-alert-profile" class="secondary-button">保存提醒配置</button></div><p class="form-hint">仅用于当前股票的研究提醒；不会发送系统通知，也不会执行交易。</p></fieldset>
+          <div class="dialog-actions"><button type="button" id="backup-db" class="secondary-button">备份数据库</button><button type="button" id="restore-db" class="secondary-button">恢复数据库</button><button type="button" id="check-db-integrity" class="secondary-button">检查完整性</button><button type="button" id="cleanup-expired-data" class="secondary-button">清理过期数据</button><button type="button" id="delete-stock-data" class="danger-button">清理当前股票数据</button></div><div class="dialog-actions"><button type="button" id="export-diagnostics" class="secondary-button">导出诊断</button></div><p id="data-dialog-status" class="form-hint"></p></form></dialog>
+        <footer class="workspace-footer"><span>数据仅供展示，不构成投资建议。</span><details class="runtime-info"><summary>运行说明</summary><ul><li>服务端订阅行情，并定期刷新历史数据。</li><li>历史数据由服务端采集；右上角可打开行情原页。</li><li>优先读取已存数据，来源与更新时间可在上方展开查看。</li><li>休市时可能没有新报价；连接异常会单独提示。</li></ul></details></footer>
+        </div>
+        <aside id="realtime-alert-panel" class="realtime-panel realtime-alert-panel" aria-label="实时提醒">
+          <div class="realtime-heading"><div><span class="eyebrow">LIVE ALERTS</span><h2>实时提醒</h2></div><span class="source-badge">应用内</span></div>
+          <div class="realtime-alert-context"><span id="alert-instrument-label">当前股票 · 等待数据</span><span id="alert-connection-label">连接状态：等待</span></div>
+          <div class="realtime-section realtime-events"><div class="realtime-section-title"><b>提醒事件 <span id="event-unread" class="event-unread" aria-label="未读提醒数量">0</span></b><div class="event-controls"><select id="event-filter" aria-label="提醒级别"><option value="all">全部</option><option value="important">重要</option><option value="warning">警告</option><option value="info">提示</option></select><button id="event-pause" class="text-button" type="button">暂停滚动</button><button id="event-clear" class="text-button" type="button">清空</button></div></div><div id="analysis-event-list" class="analysis-event-list"><span class="muted-text">暂无实时提醒</span></div></div>
+        </aside>
+      </div>
+    </main>
+    <aside id="web-panel" class="web-panel" aria-label="百度原始行情网页" hidden>
+      <header class="web-toolbar"><div><strong>原始行情网页</strong><span id="web-panel-subtitle">百度股市通 · 当前股票</span></div><button id="close-page" class="secondary-button" type="button">收起网页 ←</button></header>
+      <div class="web-placeholder">正在加载百度原网页…</div>
+    </aside>
+    <div id="panel-error" role="alert" hidden></div>
+
+    <script src="./platform.js"></script>
+    <script>
+      const price = document.querySelector('#price');
+      const increase = document.querySelector('#increase');
+      const ratio = document.querySelector('#ratio');
+      const statusText = document.querySelector('#status-text');
+      const receivedAt = document.querySelector('#received-at');
+      const dot = document.querySelector('#connection-dot');
+      const openPage = document.querySelector('#open-page');
+
+      const closePage = document.querySelector('#close-page');
+      const webPanel = document.querySelector('#web-panel');
+      const panelError = document.querySelector('#panel-error');
+      let expanded = false;
+      let panelBusy = false;
+      function renderPanel() { webPanel.hidden = true; openPage.textContent = '查看百度行情 ↗'; }
+      async function changePanel() {
+        const i = await window.StockPlatform.core.invoke('get_active_instrument');
+        if (i?.pageUrl) window.open(i.pageUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      function setConnection(state) {
+        dot.className = `connection-dot ${state}`;
+        const labels = {live:'已接收行情',connected:'已连接',waiting:'等待行情',connecting:'连接中',reconnecting:'重连中',cached:'使用缓存',disconnected:'连接断开',stale:'数据过期',blocked:'请求冷却',captcha:'等待验证',partial:'部分行情受限',error:'行情异常'};
+        document.querySelector('#connection-label').textContent = labels[state] || '检查连接';
+      }
+
+      function formatTime(ms, cached = false) {
+        if (!ms) return '等待行情数据…';
+        return `${cached ? '最后接收' : '接收时间'}：${new Date(Number(ms)).toLocaleTimeString()}`;
+      }
+
+      function displayValue(value) {
+        return value === null || value === undefined || value === '' ? '--' : value;
+      }
+
+      let lastQuoteTime = 0;
+      let activeInstrumentId = null;
+      let statusEventReceived = false;
+      function belongsToActive(payload) {
+        return !payload || payload.instrumentId == null || activeInstrumentId == null || Number(payload.instrumentId) === Number(activeInstrumentId);
+      }
+      function resetQuoteForInstrument(instrumentId) {
+        activeInstrumentId = instrumentId == null ? null : Number(instrumentId);
+        lastQuoteTime = 0;
+        price.textContent = '--';
+        increase.textContent = '涨跌 --';
+        ratio.textContent = '--';
+        receivedAt.textContent = '等待行情数据…';
+        document.querySelector('#market-time').textContent = '行情时间：--';
+        document.querySelector('#market-status').textContent = '等待行情';
+        document.body.classList.remove('positive', 'negative');
+        window.__lastQuotePayload = null;
+        if (window.__renderMarketDetails) window.__renderMarketDetails(null);
+      }
+      function renderQuote(quote) {
+        if (!quote || !belongsToActive(quote) || Number(quote.receivedAtMs) < lastQuoteTime) return;
+        if (quote.instrumentId != null) activeInstrumentId = Number(quote.instrumentId);
+        lastQuoteTime = Number(quote.receivedAtMs);
+        price.textContent = displayValue(quote.price);
+        increase.textContent = `涨跌 ${displayValue(quote.increase)}`;
+        ratio.textContent = quote.ratio == null ? '--' : `${String(quote.ratio).replace(/%$/, '')}%`;
+        const cached = Boolean(quote.cached);
+        receivedAt.textContent = formatTime(quote.receivedAtMs, cached);
+        document.querySelector('#market-time').textContent = `行情时间：${displayValue(quote.marketTime)}${cached ? ' · 已存数据' : ''}`;
+        document.querySelector('#market-status').textContent = cached ? `缓存 · ${displayValue(quote.marketStatus || '最后一次行情')}` : displayValue(quote.marketStatus);
+        const currencyNode = document.querySelector('.price-currency'); if (currencyNode && quote.currency) currencyNode.textContent = quote.currency;
+        const n = Number.parseFloat(quote.ratio);
+        document.body.classList.toggle('positive', Number.isFinite(n) && n > 0);
+        document.body.classList.toggle('negative', Number.isFinite(n) && n < 0);
+        const previousDetails = window.__lastQuotePayload || {};
+        const detailPayload = {
+          ...quote,
+          orderBook: Array.isArray(quote.orderBook) && quote.orderBook.length ? quote.orderBook : (previousDetails.orderBook || []),
+          tickTrades: Array.isArray(quote.tickTrades) && quote.tickTrades.length ? quote.tickTrades : (previousDetails.tickTrades || [])
+        };
+        window.__lastQuotePayload = detailPayload;
+        if (window.__renderMarketDetails) window.__renderMarketDetails(detailPayload);
+      }
+      function renderStatus(status) {
+        if (!status || !belongsToActive(status)) return;
+        statusText.textContent = status.message || status.state || '未知状态';
+        setConnection(status.state || 'connecting');
+      }
+      function renderHealth(health) {
+        if (!health || !belongsToActive(health)) return;
+        const stateLabels = {live:'实时',cached:'缓存',stale:'过期',reconnecting:'重连中',blocked:'冷却中',captcha:'页面验证',partial:'部分行情受限',error:'异常',disconnected:'断开'};
+        const age = Number.isFinite(Number(health.staleSeconds)) ? ` · ${Number(health.staleSeconds)} 秒前` : '';
+        const latency = Number.isFinite(Number(health.latencyMs)) ? ` · 延迟 ${Number(health.latencyMs)}ms` : '';
+        const quality = health.missingVolume ? ' · 成交量缺失' : (Number(health.invalidBars) > 0 ? ` · ${Number(health.invalidBars)} 条异常 K 线` : '');
+        const sessionLabels = {'pre-market':'盘前', open:'交易中', break:'午间休市', 'after-hours':'盘后', closed:'休市'};
+        const session = health.session ? ` · ${sessionLabels[health.session] || health.session}` : '';
+        const node = document.querySelector('#data-health-label');
+        if (node) { node.textContent = `数据健康：${stateLabels[health.state] || health.state || '未知'}${age}${latency}${quality}${session}`; node.dataset.state = health.state || 'unknown'; }
+      }
+      async function initialize() {
+        if (!window.StockPlatform) throw new Error('Web 服务尚未连接');
+        // Do not start the backend before both listeners are ready.
+        await window.StockPlatform.event.listen('quote-update', ({payload}) => renderQuote(payload));
+        await window.StockPlatform.event.listen('quote-status', ({payload}) => {
+          statusEventReceived = true;
+          renderStatus(payload);
+        });
+        await window.StockPlatform.event.listen('quote-health', ({payload}) => renderHealth(payload));
+        await window.StockPlatform.event.listen('instrument-changed', ({payload}) => {
+          const id = payload?.instrumentId ?? payload?.instrument?.id ?? payload?.id;
+          if (id != null) {
+            window.__activeGeneration = Number(payload?.generation || window.__activeGeneration || 0);
+            resetQuoteForInstrument(id);
+            if (payload?.cachedQuote) renderQuote(payload.cachedQuote);
+          }
+        });
+        if (typeof window.addEventListener === 'function') {
+          window.addEventListener('instrument-switch-start', event => resetQuoteForInstrument(event.detail?.instrumentId));
+        }
+        openPage.addEventListener('click', () => changePanel(!expanded));
+        closePage.addEventListener('click', () => changePanel(false));
+        // Synchronize the visible layout; the data collector may already be running hidden.
+        try { renderPanel(await window.StockPlatform.core.invoke('web_panel_state')); }
+        catch (e) {
+          panelError.textContent = `布局状态读取失败：${e}`;
+          panelError.hidden = false;
+        }
+        openPage.disabled = false;
+        const snapshot = await window.StockPlatform.core.invoke('start_monitor');
+        const snapshotInstrumentId = snapshot?.quote?.instrumentId ?? snapshot?.status?.instrumentId;
+        const currentInstrumentId = window.__activeInstrumentId ?? activeInstrumentId;
+        // A startup response may arrive after the user has already selected another stock.
+        if (snapshotInstrumentId != null && currentInstrumentId != null && Number(snapshotInstrumentId) !== Number(currentInstrumentId)) return;
+        const snapshotGeneration = Number(snapshot?.status?.generation || snapshot?.quote?.generation || 0);
+        if (snapshotGeneration && Number(window.__activeGeneration || 0) > snapshotGeneration) return;
+        activeInstrumentId = snapshotInstrumentId ?? activeInstrumentId;
+        window.__activeInstrumentId = activeInstrumentId;
+        window.__activeGeneration = Number(snapshot?.status?.generation || window.__activeGeneration || 0);
+        renderQuote(snapshot.quote);
+        if (!statusEventReceived) renderStatus(snapshot.status);
+      }
+      initialize().catch(e => {
+        statusText.textContent = `初始化失败：${e}`;
+        setConnection('disconnected');
+      });
+    </script>
+    <script src="./workbench.js"></script>
+    <script src="./chart.js"></script>
+    <script src="./chart-app.js"></script>
+  </body>
+</html>

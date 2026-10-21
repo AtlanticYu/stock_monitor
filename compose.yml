@@ -1,0 +1,39 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: stocks_monitor_platform
+      MYSQL_USER: stocks
+      MYSQL_PASSWORD: ${DB_PASSWORD:?请在 .env 设置 DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u stocks -D stocks_monitor_platform -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+  app:
+    build: .
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/stocks_monitor_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+      DB_USERNAME: stocks
+      DB_PASSWORD: ${DB_PASSWORD:?请在 .env 设置 DB_PASSWORD}
+      APP_USERNAME: ${APP_USERNAME:-admin}
+      APP_PASSWORD: ${APP_PASSWORD:?请在 .env 设置 APP_PASSWORD}
+      CONTEXT_PATH: ${CONTEXT_PATH:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MARKET_ENABLED: ${MARKET_ENABLED:-true}
+    ports:
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:8080"
+    volumes:
+      - archives:/app/data/archives
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  mysql-data:
+  archives:

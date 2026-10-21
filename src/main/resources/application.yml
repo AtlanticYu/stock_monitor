@@ -1,0 +1,54 @@
+server:
+  port: ${PORT:8090}
+  forward-headers-strategy: framework
+  tomcat:
+    max-http-form-post-size: 16MB
+    max-swallow-size: 16MB
+  servlet:
+    context-path: ${CONTEXT_PATH:}
+    session:
+      timeout: 8h
+      cookie:
+        http-only: true
+        secure: ${COOKIE_SECURE:false}
+        same-site: lax
+spring:
+  application:
+    name: stocks-monitor-platform
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/stocks_monitor_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false}
+    # Supply real credentials through environment variables; do not commit them.
+    username: ${DB_USERNAME:stocks}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 8
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: always
+  mvc:
+    async:
+      request-timeout: 0
+  servlet:
+    multipart:
+      max-file-size: 16MB
+      max-request-size: 16MB
+  security:
+    user:
+      name: ${APP_USERNAME:admin}
+      # Empty APP_PASSWORD keeps Spring Security's generated startup password.
+      password: ${APP_PASSWORD:}
+      roles: ADMIN
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+stocks:
+  market-enabled: ${MARKET_ENABLED:true}
+  refresh-delay-ms: ${MARKET_REFRESH_MS:300000}
+  retention-days: ${RETENTION_DAYS:365}
+  archive-dir: ${ARCHIVE_DIR:./data/archives}

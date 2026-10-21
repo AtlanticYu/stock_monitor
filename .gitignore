@@ -1,0 +1,15 @@
+/target/
+/data/
+.env
+.env.*
+!.env.example
+*.log
+
+__pycache__/
+*.pyc
+
+# Local IDE and operating system files
+.idea/
+.vscode/
+*.iml
+.DS_Store

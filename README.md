@@ -37,6 +37,10 @@ mvn clean package
 java -jar target/stocks-monitor-platform-1.0.0.jar
 ```
 
+`application.yml` 仅保留通用账号 `stocks` 和空密码作为回退值；请通过 `DB_USERNAME` / `DB_PASSWORD` 提供实际连接信息，不要把本机凭据写回源码。使用 IDE 启动时，在 Run/Debug Configuration 的 Environment variables 中设置这两个变量；连接其他数据库时同时设置 `DB_URL`。
+
+`.env` 由 Docker Compose 自动读取，IDE、`mvn spring-boot:run` 和 `java -jar` 不会自动读取它。本机启动请使用上面的 `export` 命令，或在 IDE 中配置环境变量。`.env`、`.env.*`、`.idea/`、`.vscode/`、`*.iml` 和 `.DS_Store` 已加入忽略规则；`.env.example` 作为不含真实密码的模板保留在版本管理中。
+
 `mvn spring-boot:run` 可用于开发。首次启动自动执行 `db/migration/V1__initial_schema.sql`。未设置登录密码时，Spring Security 在启动日志中生成临时密码；部署时应在环境中提供固定密码。数据库口令、登录口令、任何部署令牌都不写入源码。
 
 ## 路径与反向代理
