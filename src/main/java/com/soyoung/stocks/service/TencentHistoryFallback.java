@@ -24,7 +24,9 @@ final class TencentHistoryFallback {
     // Tencent's canonical US symbol includes the exchange suffix (e.g. NVDA.OQ).
     // Resolve it from the provider's quote metadata instead of assuming every stock is Nasdaq.
     String canonical =
-        "us".equals(instrument.market) ? canonicalSymbol(root, symbol, instrument.code) : symbol;
+        "us".equals(instrument.market) && "stock".equals(InstrumentService.financeType(instrument))
+            ? canonicalSymbol(root, symbol, instrument.code)
+            : symbol;
     if (!canonical.equals(symbol)) {
       root = request(canonical);
       symbol = canonical;
@@ -45,6 +47,13 @@ final class TencentHistoryFallback {
 
   static String baseSymbol(Instrument instrument) {
     String market = instrument.market, code = instrument.code;
+    if ("index".equals(InstrumentService.financeType(instrument))) {
+      if ("us".equals(market)) {
+        if (Arrays.asList("IXIC", "DJI", "INX").contains(code)) return "us." + code;
+        throw new IllegalArgumentException("备用历史源暂不支持该美股指数");
+      }
+      if ("cn-ab".equals(market)) throw new IllegalArgumentException("指数备用历史源需要明确的 sh 或 sz 市场代码");
+    }
     if ("us".equals(market)) return "us" + code;
     if ("hk".equals(market))
       return "hk" + code; // Preserve five-digit codes, including leading zeros.

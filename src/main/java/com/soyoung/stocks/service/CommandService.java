@@ -291,8 +291,10 @@ public class CommandService {
     String url = (String) a.get("pageUrl");
     if (url != null) {
       Instrument identity = InstrumentService.identity(url);
-      if (!old.market.equals(identity.market) || !old.code.equals(identity.code))
-        throw new IllegalArgumentException("编辑只修改名称和状态；修改股票代码请添加新股票");
+      if (!old.market.equals(identity.market)
+          || !old.code.equals(identity.code)
+          || !InstrumentService.financeType(old).equals(InstrumentService.financeType(identity)))
+        throw new IllegalArgumentException("编辑只修改名称和状态；修改市场、代码或股票/指数类型请添加新标的");
     }
     if (a.get("name") != null || a.get("displayName") != null) {
       String name = String.valueOf(a.getOrDefault("displayName", a.get("name"))).trim();

@@ -79,6 +79,57 @@ class WebIntegrationTest {
   }
 
   @Test
+  void indexCanBePreviewedSavedEditedAndLoadedAsAChart() throws Exception {
+    String url = "https://finance.baidu.com/index/us-IXIC";
+    mvc.perform(
+            post("/api/commands/preview_instrument")
+                .with(user("admin"))
+                .with(csrf())
+                .contentType("application/json")
+                .content(write(map("pageUrl", url))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("IXIC"))
+        .andExpect(jsonPath("$.name").value("纳斯达克综合指数"))
+        .andExpect(jsonPath("$.pageUrl").value(url));
+    Instrument index = (Instrument) commands.execute("add_instrument", map("pageUrl", url));
+    assertEquals(url, db.instrument(index.id).pageUrl);
+    assertEquals("index", InstrumentService.financeType(db.instrument(index.id)));
+    mvc.perform(
+            post("/api/instruments/" + index.id + "/series")
+                .with(user("admin"))
+                .with(csrf())
+                .contentType("application/json")
+                .content(write(fixture())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.imported").value(260));
+    Instrument edited =
+        (Instrument)
+            commands.execute(
+                "update_instrument",
+                map("id", index.id, "pageUrl", url, "displayName", "纳指", "enabled", false));
+    assertEquals("纳指", edited.name);
+    assertEquals("custom", edited.nameSource);
+    assertFalse(edited.enabled);
+    assertEquals(url, edited.pageUrl);
+    mvc.perform(
+            post("/api/commands/load_chart")
+                .with(user("admin"))
+                .with(csrf())
+                .contentType("application/json")
+                .content(write(map("instrumentId", index.id, "period", "day"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.marketTimezone").value("America/New_York"))
+        .andExpect(jsonPath("$.series.bars.length()").value(260));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            commands.execute(
+                "update_instrument",
+                map("id", index.id, "pageUrl", "https://finance.baidu.com/stock/us-ixic")));
+    assertEquals(url, db.instrument(index.id).pageUrl);
+  }
+
+  @Test
   void importsRealBarsRunsBacktestAndPersistsResults() throws Exception {
     Instrument i =
         (Instrument) commands.execute("add_instrument", map("pageUrl", "us-AAPL", "name", "Apple"));

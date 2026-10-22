@@ -18,8 +18,8 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/stocks_monitor_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false}
     # Supply real credentials through environment variables; do not commit them.
-    username: ${DB_USERNAME:stocks}
-    password: ${DB_PASSWORD:}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
     hikari:
       maximum-pool-size: 8
   flyway:
@@ -37,7 +37,7 @@ spring:
     user:
       name: ${APP_USERNAME:admin}
       # Empty APP_PASSWORD keeps Spring Security's generated startup password.
-      password: ${APP_PASSWORD:}
+      password: ${APP_PASSWORD:admin}
       roles: ADMIN
 management:
   endpoints:

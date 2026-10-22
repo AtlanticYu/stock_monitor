@@ -33,6 +33,34 @@ class MarketHistoryTest {
   }
 
   @Test
+  void indexHistoryAndRealtimeSubscriptionsUseIndexFinanceType() {
+    Instrument index = InstrumentService.identity("https://finance.baidu.com/index/us-IXIC");
+    for (String period : Arrays.asList("intraday", "day", "week", "month", "year")) {
+      HttpUrl url = MarketDataService.historyUrl(index, period);
+      assertEquals("index", url.queryParameter("financeType"));
+      assertEquals("IXIC", url.queryParameter("code"));
+      assertEquals("us", url.queryParameter("stock_type"));
+      assertEquals(
+          "quotation_" + (period.equals("intraday") ? "minute" : "kline") + "_us",
+          url.queryParameter("group"));
+      assertEquals(
+          "stock", MarketDataService.historyUrl(instrument, period).queryParameter("financeType"));
+    }
+    com.fasterxml.jackson.databind.JsonNode subscription =
+        node(MarketDataService.subscription(index));
+    assertEquals("subscribe", subscription.path("method").asText());
+    assertEquals("index", subscription.path("items").get(0).path("financeType").asText());
+    assertEquals("IXIC", subscription.path("items").get(0).path("code").asText());
+    assertEquals(
+        "stock",
+        node(MarketDataService.subscription(instrument))
+            .path("items")
+            .get(0)
+            .path("financeType")
+            .asText());
+  }
+
+  @Test
   void parsesActualBaiduHistoricalColumnShape() throws Exception {
     byte[] fixture;
     try (java.io.InputStream stream =

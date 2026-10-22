@@ -32,6 +32,36 @@ class TencentHistoryFallbackTest {
   }
 
   @Test
+  void parsesActualNasdaqIndexHistoryAndMapsOnlySupportedUsIndices() throws Exception {
+    Instrument index = InstrumentService.identity("index/us-IXIC");
+    assertEquals("us.IXIC", TencentHistoryFallback.baseSymbol(index));
+    assertEquals(
+        "us.DJI", TencentHistoryFallback.baseSymbol(InstrumentService.identity("index/us-DJI")));
+    assertEquals(
+        "us.INX", TencentHistoryFallback.baseSymbol(InstrumentService.identity("index/us-INX")));
+    assertFalse(TencentHistoryFallback.supports(InstrumentService.identity("index/us-UNKNOWN")));
+    assertFalse(TencentHistoryFallback.supports(InstrumentService.identity("index/ab-000001")));
+    assertEquals(
+        "sh000001",
+        TencentHistoryFallback.baseSymbol(InstrumentService.identity("index/sh-000001")));
+    Series series = TencentHistoryFallback.parse(fixture("ixic"), "us.IXIC", index);
+    assertEquals(2, series.bars.size());
+    Bar last = series.bars.get(1);
+    assertEquals(26332.920, last.open, 0.000001);
+    assertEquals(26424.820, last.close, 0.000001);
+    assertEquals(26601.720, last.high, 0.000001);
+    assertEquals(26179.740, last.low, 0.000001);
+    assertEquals(6999145080.0, last.volume);
+    assertEquals("2026-10-20", com.soyoung.stocks.domain.Models.date(last.time, "us").toString());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> TencentHistoryFallback.parse(fixture("ixic"), "usIXIC", index));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> TencentHistoryFallback.parse(fixture("ixic"), "us.IXIC", instrument));
+  }
+
+  @Test
   void resolvesExchangeSuffixFromMetadataAndRejectsUnrelatedSymbol() {
     JsonNode data =
         node(

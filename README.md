@@ -90,7 +90,7 @@ java -jar target/stocks-monitor-platform-1.0.0.jar
 
 ## 导入行情
 
-先添加股票，如 `hk-00700`、`sh-600519`、`sz-000001`、`ab-688825` 或 `us-AAPL`，然后在“设置”中选择 JSON 文件并点击“导入当前股票行情”。
+先添加股票，如 `hk-00700`、`sh-600519`、`sz-000001`、`ab-688825` 或 `us-AAPL`，也支持百度指数页，例如 `https://finance.baidu.com/index/us-IXIC`（纳斯达克综合指数）、`index/us-DJI`、`index/us-INX`、`index/hk-HSI` 或 `index/sh-000001`。指数请保留 `/index/` 路径，以便实时订阅和历史请求使用 `financeType=index`；编辑时不能切换股票/指数类型。已适配 IXIC、DJI、INX 的腾讯日 K 备用源；不支持备用映射的指数沿用百度数据源，验证码或请求失败时保留缓存并显示原因。然后在“设置”中选择 JSON 文件并点击“导入当前股票行情”。
 
 ```json
 {

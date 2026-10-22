@@ -250,14 +250,14 @@
     // numeric code is intentionally rejected because it is ambiguous between
     // SSE/SZSE/HK/US.
     if (/^(hk|ab|sh|sz|us|cn-ab|cn-sh|cn-sz)-[^\s/?#]+$/i.test(text)) text = `https://finance.baidu.com/stock/${text}`;
-    else if (/^\/?stock\/(hk|ab|sh|sz|us|cn-ab|cn-sh|cn-sz)-[^\s/?#]+$/i.test(text)) text = `https://finance.baidu.com/${text.replace(/^\//, '')}`;
-    else if (/^finance\.baidu\.com\/stock\//i.test(text)) text = `https://${text}`;
+    else if (/^\/?(?:stock|index)\/(hk|ab|sh|sz|us|cn-ab|cn-sh|cn-sz)-[^\s/?#]+$/i.test(text)) text = `https://finance.baidu.com/${text.replace(/^\//, '')}`;
+    else if (/^finance\.baidu\.com\/(?:stock|index)\//i.test(text)) text = `https://${text}`;
     return text;
   }
 
   function openStockDialog(item = null) {
     editingId = item?.id ?? null;
-    $('settings-title').textContent = item ? '编辑股票' : '添加股票';
+    $('settings-title').textContent = item ? '编辑股票 / 指数' : '添加股票 / 指数';
     $('settings-url').value = item?.pageUrl || '';
     $('settings-name').value = item && (item.nameSource || item.name_source) === 'custom' ? (item.name || '') : '';
     $('settings-enabled').checked = item?.enabled ?? true;
@@ -270,10 +270,10 @@
   async function saveStock(event) {
     event.preventDefault();
     const pageUrl = normalizePageInput($('settings-url').value);
-    if (!pageUrl) { showHint('请输入百度股票页面地址，例如 ab-688825 或 https://finance.baidu.com/stock/us-aapl。', true); return; }
+    if (!pageUrl) { showHint('请输入百度股票或指数页面地址，例如 ab-688825 或 https://finance.baidu.com/index/us-IXIC。', true); return; }
     $('settings-url').value = pageUrl;
     const autoName = !$('settings-name').value.trim();
-    if (autoName && $('name-preview-status')) { $('name-preview-status').textContent = '正在从百度页面识别股票名称…'; $('name-preview-status').classList.remove('error-text'); }
+    if (autoName && $('name-preview-status')) { $('name-preview-status').textContent = '正在识别股票或指数名称…'; $('name-preview-status').classList.remove('error-text'); }
     try {
       let item;
       const args = { pageUrl, displayName: $('settings-name').value.trim() || null };

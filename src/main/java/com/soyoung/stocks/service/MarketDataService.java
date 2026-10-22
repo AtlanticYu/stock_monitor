@@ -195,26 +195,7 @@ public class MarketDataService {
             req,
             new WebSocketListener() {
               public void onOpen(WebSocket w, Response r) {
-                w.send(
-                    write(
-                        map(
-                            "method",
-                            "subscribe",
-                            "source",
-                            "pc-web",
-                            "product",
-                            "snapshot",
-                            "items",
-                            Collections.singletonList(
-                                map(
-                                    "name",
-                                    i.name,
-                                    "code",
-                                    i.code,
-                                    "financeType",
-                                    "stock",
-                                    "market",
-                                    market(i))))));
+                w.send(write(subscription(i)));
               }
 
               public void onMessage(WebSocket w, String text) {
@@ -241,8 +222,31 @@ public class MarketDataService {
     sockets.put(i.id, ws);
   }
 
+  static Map<String, Object> subscription(Instrument i) {
+    return map(
+        "method",
+        "subscribe",
+        "source",
+        "pc-web",
+        "product",
+        "snapshot",
+        "items",
+        Collections.singletonList(
+            map(
+                "name",
+                i.name,
+                "code",
+                i.code,
+                "financeType",
+                InstrumentService.financeType(i),
+                "market",
+                market(i))));
+  }
+
   private void quote(Instrument i, JsonNode d) {
-    if (!d.path("code").asText().equalsIgnoreCase(i.code)
+    if ((d.hasNonNull("financeType")
+            && !InstrumentService.financeType(i).equals(d.path("financeType").asText()))
+        || !d.path("code").asText().equalsIgnoreCase(i.code)
         || !d.path("market").asText().equals(market(i))) return;
     JsonNode cur = d.path("cur");
     Double price = finite(cur.get("price"));
@@ -302,7 +306,7 @@ public class MarketDataService {
       {"all", "1"},
       {"code", i.code},
       {"query", i.code},
-      {"financeType", "stock"},
+      {"financeType", InstrumentService.financeType(i)},
       {
         "group",
         ("intraday".equals(period) ? "quotation_minute_" : "quotation_kline_") + historyMarket(i)
