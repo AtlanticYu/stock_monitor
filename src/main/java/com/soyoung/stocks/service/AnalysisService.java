@@ -5,6 +5,7 @@ import static com.soyoung.stocks.service.IndicatorEngine.*;
 
 import com.soyoung.stocks.domain.Models.*;
 import com.soyoung.stocks.repository.StockRepository;
+import com.soyoung.stocks.storage.UserScope;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,8 @@ public class AnalysisService {
   private final IndicatorEngine engine;
   private final EventHub hub;
   private final List<Map<String, Object>> catalog;
-  private final Map<Long, Map<String, Object>> lastAnalysis = new ConcurrentHashMap<>();
-  private final Map<Long, Long> lastAlert = new ConcurrentHashMap<>();
+  private final Map<String, Map<String, Object>> lastAnalysis = new ConcurrentHashMap<>();
+  private final Map<String, Long> lastAlert = new ConcurrentHashMap<>();
 
   @SuppressWarnings("unchecked")
   public AnalysisService(StockRepository db, IndicatorEngine engine, EventHub hub)
@@ -281,13 +282,14 @@ public class AnalysisService {
   }
 
   public synchronized void publish(Instrument i) {
-    Map<String, Object> current = realtime(i), previous = lastAnalysis.put(i.id, current);
+    Map<String, Object> current = realtime(i),
+        previous = lastAnalysis.put(UserScope.owner() + ":" + i.id, current);
     hub.emit("realtime-analysis-update", current);
     Map<String, Object> profile = object(db.profile(i.id));
     if (!Boolean.TRUE.equals(profile.get("enabled"))) return;
     long now = System.currentTimeMillis();
-    if (now - lastAlert.getOrDefault(i.id, 0L) < number(profile, "cooldownSeconds", 900) * 1000)
-      return;
+    if (now - lastAlert.getOrDefault(UserScope.owner() + ":" + i.id, 0L)
+        < number(profile, "cooldownSeconds", 900) * 1000) return;
     String signal = String.valueOf(current.get("signal"));
     List<String> reasons = new ArrayList<>();
     if (previous != null && !Objects.equals(previous.get("signal"), current.get("signal")))
@@ -336,7 +338,7 @@ public class AnalysisService {
       }
     }
     if (reasons.isEmpty()) return;
-    lastAlert.put(i.id, now);
+    lastAlert.put(UserScope.owner() + ":" + i.id, now);
     Map<String, Object> event =
         map(
             "instrumentId",

@@ -2,7 +2,7 @@
 
 `stocks_monitor` 的独立 Java Web 版本。原 Rust/Tauri 工程保留，本目录可单独复制到服务器或 Git 仓库构建。
 
-采用 **Spring Boot 2.3.12.RELEASE、Java 8、Maven、Spring JDBC、MySQL、Flyway、Spring Security、SSE**。页面沿用原生 JavaScript、HTML/CSS 和 Canvas，不需要安装 Node、Vue 或 React，也没有 Tauri/Rust 运行时依赖。
+采用 **Spring Boot 2.3.12.RELEASE、Java 8、Maven、Spring JDBC、MySQL、Flyway、Spring Security、SSE**。页面沿用原生 JavaScript、HTML/CSS 和 Canvas，运行 Java 服务不需要安装 Node、Vue 或 React，也没有 Tauri/Rust 运行时依赖。Supabase 浏览器 SDK 已打包进静态资源，只有更新 SDK 时需要 Node 和 npm。
 
 ## 启动
 
@@ -43,6 +43,37 @@ java -jar target/stocks-monitor-platform-1.0.0.jar
 
 `mvn spring-boot:run` 可用于开发。首次启动自动执行 `db/migration/V1__initial_schema.sql`。未设置登录密码时，Spring Security 在启动日志中生成临时密码；部署时应在环境中提供固定密码。数据库口令、登录口令、任何部署令牌都不写入源码。
 
+## 公司 AI 应用部署平台与 Supabase 存储
+
+此项目仍需 Java 服务运行行情采集、技术指标、回测及 SSE；数据库可以使用本地 MySQL，或平台提供的 Supabase REST 数据空间。不能将 REST 地址填进 JDBC URL。原 MySQL 模式和 Flyway 脚本保留，默认本机启动仍使用 MySQL。
+
+容器默认启用 `platform,supabase`，监听 `8080`，上下文路径默认 `/zhoubao`，无需配置 MySQL 密码和应用公共管理员密码。也可本机运行：
+
+```bash
+java -jar target/stocks-monitor-platform-1.0.0.jar --spring.profiles.active=platform,supabase
+```
+
+公开配置位于 `application-supabase.yml`，可通过 `SUPABASE_URL`、`SUPABASE_ANON_KEY`、`SUPABASE_SCHEMA` 覆盖。默认地址为平台 Supabase，schema 为 `u_yuzhengxin`；公钥按平台设计公开，数据库密码和 service-role 密钥均不使用。浏览器通过 `@supabase/supabase-js` 登录和刷新用户 session，创建客户端时指定 `db.schema`；Java 验证访问令牌后，使用该用户令牌调用 PostgREST。SSE 用携带 Authorization 的 fetch 流式请求，访问令牌不会放进 URL。
+
+Supabase 模式使用邮箱/密码登录 Supabase Auth，不再使用原来的 `admin` 共享登录。平台工作台账号是否与 Supabase Auth 互通取决于平台配置。登录页提供按需注册按钮，不会自动创建任何测试账号。
+
+云端表及字段见 [deploy/supabase/README.md](deploy/supabase/README.md)，建表脚本为 `deploy/supabase/schema.sql`，通过平台受限迁移工具分批执行，每批不超过 24 条语句。所有表按 `owner_id = auth.uid()` 开启并强制执行 RLS；唯一约束和关联外键也包含用户字段。后台任务、内存缓存及 SSE 推送按用户隔离。当前用户令牌过期且未续期后，不再为该用户执行定时采集。
+
+K 线在 `stocks_series.bars` 中按“用户＋标的＋周期”保存为 JSONB 快照，源切换和复权修订以单次请求原子更新；通过 `revision` 比较并交换处理并发更新，避免半批覆盖。其他跨表操作不承诺数据库事务语义。云端整库恢复明确禁用以避免部分覆盖；保留单标的行情导入、数据导出和云端备份。MySQL 原有事务恢复逻辑不受影响。本机 MySQL 的既有数据不会自动上传。
+
+已验证通过 `@supabase/supabase-js` 使用指定 schema 查询实际表可返回 `200 []`，匿名写入被 RLS 以 `42501` 拒绝。REST 根路径可能返回网关 `403`，应使用实际表路径检查连接。匿名公钥本身不代表用户身份，真实登录用户的读写和两个真实用户间的隔离仍需登录会话验证；不得通过关闭 RLS 或使用其他人的令牌规避。
+
+如使用 MySQL 容器模式，显式设置 `SPRING_PROFILES_ACTIVE=platform` 并提供 `DB_URL`、`DB_USERNAME`、`DB_PASSWORD`、`APP_PASSWORD`。Compose 已启用这一覆盖。环境变量模板见 `deploy/platform.env.example`。
+
+发布前确认平台代理对外部路径的处理：保留前缀时使用 `CONTEXT_PATH=/zhoubao`；若代理剥离入口前缀，则根据平台实际后端路由调整上下文。发布后检查登录跳转、静态资源、API、SSE 和实际数据库读写，不能仅以页面上传成功作为服务可用依据。
+
+更新浏览器 SDK（已提交生成产物，日常 Maven/Docker 构建不需要 npm）：
+
+```bash
+npm ci
+npm run build:supabase
+```
+
 ## 路径与反向代理
 
 可部署在域名根路径，也可部署到 `/zhoubao/`：
@@ -58,7 +89,7 @@ java -jar target/stocks-monitor-platform-1.0.0.jar
 
 | 功能 | Web 版实现 |
 | --- | --- |
-| 港股、沪深 A 股、美股股票列表 | MySQL 存储，添加、编辑名称、启停、排序、切换与删除 |
+| 港股、沪深 A 股、美股股票列表 | MySQL / Supabase 存储，添加、编辑名称、启停、排序、切换与删除 |
 | 行情快照 | 服务端订阅百度 WebSocket，推送价格、盘口及逐笔字段；缺失字段保留为空 |
 | 历史行情与图表 | 服务端请求百度历史接口，美股/港股/沪深 A 股日 K 支持腾讯备用源；分时/日/周/月/年 K、日线聚合、Canvas 图表、均线与缩放 |
 | 数据采集失败 | 显示来源错误，冷却 5 分钟，保留已有缓存；不伪造行情 |
@@ -86,7 +117,7 @@ java -jar target/stocks-monitor-platform-1.0.0.jar
 3. 组合引擎标为 **v2**：拒绝无汇率的跨币种混合；同市场按共同交易日期对齐；开盘成交量限制使用前一日已知成交量，修正旧版当日全日成交量的前视；单次再平衡未成交余量失效，整股余量不会阻止下一次再平衡。组合结果与 Rust v1 不保证逐笔一致。
 4. 组合默认 60% / 20% / 20% 是同一预设策略曲线的分段统计。`run_walk_forward` 才会按训练区间选择周/月再平衡配置，再独立模拟后续验证区间；各窗口独立资金，不拼接为一条收益曲线。普通组合研究不能称为模型训练。
 5. 组合模拟没有企业行动自动修复、外汇换算、完整交易所节假日库或每只股票的特殊涨跌停规则。默认市场规则只是可配置模型，例如港股手数应按真实标的修改。数据来源与复权口径应在研究前核实。
-6. 备份是数据库业务表的逻辑备份，不是原 SQLite 文件或 MySQL 物理备份。页面不接受服务器文件路径。恢复替换当前业务表，先校验格式并保存原数据，写入使用事务。大数据量生产备份可另外使用 MySQL 运维工具。
+6. MySQL 模式下，备份是数据库业务表的逻辑备份，不是原 SQLite 文件或 MySQL 物理备份。页面不接受服务器文件路径。恢复替换当前业务表，先校验格式并保存原数据，写入使用事务。大数据量生产备份可另外使用 MySQL 运维工具。
 
 ## 导入行情
 
@@ -163,7 +194,7 @@ python3 scripts/smoke_web.py http://127.0.0.1:8080/
 python3 scripts/smoke_web.py http://127.0.0.1:8080/zhoubao/
 ```
 
-31 项 Java 测试和 2 项 Python 迁移测试通过。Java 测试包括 Rust 技术指标数值和空值对齐、4 策略×2 日期区间的 Rust 回测收益/成交/曲线对齐、整股余量回归、币种/价格口径校验、资金守恒、前视成交量检查、行情解析/验证码/URL 校验、数字 K 线周期、日 K/分时失败隔离与错误恢复、备用源美股/港股/沪深市场映射、港股前导零、A 股成交量单位、股票代码及复权口径校验、登录与 CSRF、持久化和备份恢复。前端回归另覆盖同股刷新保留图表、加载失败保留图表、切换股票清空旧图忽略其他股票事件，以及启动旧响应不覆盖当前选中股票。H2 的 MySQL 模式仅用于自动化测试，实际运行仍连接 MySQL。
+31 项 Java 测试和 2 项 Python 迁移测试通过。Java 测试包括 Rust 技术指标数值和空值对齐、4 策略×2 日期区间的 Rust 回测收益/成交/曲线对齐、整股余量回归、币种/价格口径校验、资金守恒、前视成交量检查、行情解析/验证码/URL 校验、数字 K 线周期、日 K/分时失败隔离与错误恢复、备用源美股/港股/沪深市场映射、港股前导零、A 股成交量单位、股票代码及复权口径校验、登录与 CSRF、持久化和备份恢复。前端回归另覆盖同股刷新保留图表、加载失败保留图表、切换股票清空旧图忽略其他股票事件，以及启动旧响应不覆盖当前选中股票。H2 的 MySQL 模式仅用于自动化测试。运行时按配置连接 MySQL 或 Supabase REST。Supabase 新增测试覆盖用户令牌、schema/owner 条件、分页、失败不泄露凭据、用户隔离、并发行情快照和无 JDBC 启动。真实云端用户读写仍需完成平台认证后验证。
 
 本地还进行了真实 MySQL 5.7 的 Flyway 建表、打包 JAR 启动、`/zhoubao/` 下的浏览器操作验证。还在独立 H2 环境中验证了 Java 真实网络请求自动同步 NVDA、港股 01810、沪市 688825（通用 ab 代码）和深市 000001，并验证浏览器绘图和股票切换。Docker Compose 文件已提供；当前环境没有运行中的 Docker 服务，未执行容器镜像构建。
 
@@ -173,7 +204,7 @@ python3 scripts/smoke_web.py http://127.0.0.1:8080/zhoubao/
 src/main/java/com/soyoung/stocks/
   config/       登录、CSRF 与请求大小限制
   domain/       行情、股票、回测请求模型
-  repository/   MySQL 数据读写
+  repository/   MySQL / Supabase 数据读写
   service/      指标、单股回测、组合研究、采集、SSE、备份与命令路由
   web/          HTTP API
 src/main/resources/

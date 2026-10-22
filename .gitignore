@@ -13,3 +13,6 @@ __pycache__/
 .vscode/
 *.iml
 .DS_Store
+
+# Browser build dependencies
+/node_modules/

@@ -229,7 +229,7 @@ public class CommandService {
         db.deleteStrategy(id(a, "id"));
         return true;
       case "database_path":
-        return "MySQL · 服务端持久化";
+        return db.storageDescription();
       case "get_retention_days":
         return Integer.parseInt(db.setting("retention_days", "365"));
       case "save_retention_days":

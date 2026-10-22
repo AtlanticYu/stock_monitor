@@ -1,0 +1,11 @@
+{
+  "name": "stocks-monitor-browser-dependencies",
+  "private": true,
+  "scripts": {
+    "build:supabase": "esbuild frontend/supabase-sdk.js --bundle --format=iife --global-name=StockSupabaseSDK --target=es2020 --minify --outfile=src/main/resources/static/assets/supabase-sdk.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
+    "esbuild": "0.28.2"
+  }
+}

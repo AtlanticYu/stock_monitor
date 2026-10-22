@@ -1,16 +1,18 @@
 package com.soyoung.stocks.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
+@Profile("!supabase")
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
   @Override
   protected void configure(HttpSecurity http) throws Exception {
     http.authorizeRequests()
-        .antMatchers("/actuator/health", "/error", "/assets/app-icon.png")
+        .antMatchers("/api/storage", "/actuator/health", "/error", "/assets/app-icon.png")
         .permitAll()
         .anyRequest()
         .authenticated()

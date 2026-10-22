@@ -18,6 +18,7 @@ services:
   app:
     build: .
     environment:
+      SPRING_PROFILES_ACTIVE: platform
       DB_URL: jdbc:mysql://mysql:3306/stocks_monitor_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
       DB_USERNAME: stocks
       DB_PASSWORD: ${DB_PASSWORD:?请在 .env 设置 DB_PASSWORD}

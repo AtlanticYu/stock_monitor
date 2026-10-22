@@ -43,9 +43,9 @@ public class ApiController {
         "username",
         request.getUserPrincipal().getName(),
         "csrfHeader",
-        token.getHeaderName(),
+        token == null ? null : token.getHeaderName(),
         "csrfToken",
-        token.getToken());
+        token == null ? null : token.getToken());
   }
 
   @PostMapping("/commands/{name}")

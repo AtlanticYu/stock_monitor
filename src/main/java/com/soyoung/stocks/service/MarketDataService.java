@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.soyoung.stocks.domain.Models;
 import com.soyoung.stocks.domain.Models.*;
 import com.soyoung.stocks.repository.StockRepository;
+import com.soyoung.stocks.storage.UserScope;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -31,11 +32,11 @@ public class MarketDataService {
           .build();
   private final TencentHistoryFallback historyFallback = new TencentHistoryFallback(http);
   private final ExecutorService worker = Executors.newFixedThreadPool(2);
-  private final Set<Long> busy = ConcurrentHashMap.newKeySet();
-  private final Map<Long, Long> cooldown = new ConcurrentHashMap<>();
-  private final Map<Long, String> errors = new ConcurrentHashMap<>();
+  private final Set<String> busy = ConcurrentHashMap.newKeySet();
+  private final Map<String, Long> cooldown = new ConcurrentHashMap<>();
+  private final Map<String, String> errors = new ConcurrentHashMap<>();
   private final Map<String, String> historyErrors = new ConcurrentHashMap<>();
-  private final Map<Long, WebSocket> sockets = new ConcurrentHashMap<>();
+  private final Map<String, WebSocket> sockets = new ConcurrentHashMap<>();
   private volatile boolean closing;
 
   public MarketDataService(
@@ -49,30 +50,40 @@ public class MarketDataService {
     this.enabled = enabled;
   }
 
+  private static String scopeKey(long id) {
+    return UserScope.owner() + ":" + id;
+  }
+
   public String refresh(Instrument i) {
     if (!enabled) return "自动行情采集已关闭，可导入真实 OHLCV 数据";
-    if (System.currentTimeMillis() < cooldown.getOrDefault(i.id, 0L)) return "数据源请求冷却中；保留已有数据";
-    if (busy.add(i.id))
+    if (System.currentTimeMillis() < cooldown.getOrDefault(scopeKey(i.id), 0L))
+      return "数据源请求冷却中；保留已有数据";
+    UserScope.Identity identity = UserScope.current();
+    if (busy.add(scopeKey(i.id)))
       worker.submit(
-          () -> {
-            try {
-              connect(i);
-              resolveName(i);
-              refreshHistory(i);
-            } catch (Exception e) {
-              String message = e.getMessage() == null ? "行情请求失败" : e.getMessage();
-              errors.put(i.id, message);
-              cooldown.put(i.id, System.currentTimeMillis() + 300000);
-              hub.emit(
-                  "chart-capture-status",
-                  map("instrumentId", i.id, "state", "error", "message", message));
-              hub.emit(
-                  "quote-status", map("instrumentId", i.id, "state", "error", "message", message));
-            } finally {
-              busy.remove(i.id);
-              hub.emit("quote-health", health(i));
-            }
-          });
+          () ->
+              UserScope.run(
+                  identity,
+                  () -> {
+                    try {
+                      connect(i);
+                      resolveName(i);
+                      refreshHistory(i);
+                    } catch (Exception e) {
+                      String message = e.getMessage() == null ? "行情请求失败" : e.getMessage();
+                      errors.put(scopeKey(i.id), message);
+                      cooldown.put(scopeKey(i.id), System.currentTimeMillis() + 300000);
+                      hub.emit(
+                          "chart-capture-status",
+                          map("instrumentId", i.id, "state", "error", "message", message));
+                      hub.emit(
+                          "quote-status",
+                          map("instrumentId", i.id, "state", "error", "message", message));
+                    } finally {
+                      busy.remove(scopeKey(i.id));
+                      hub.emit("quote-health", health(i));
+                    }
+                  }));
     return "已提交服务端采集任务；返回后刷新图表";
   }
 
@@ -80,7 +91,7 @@ public class MarketDataService {
   void refreshHistory(Instrument i) {
     boolean failed = false;
     for (String period : Arrays.asList("day", "intraday")) {
-      String key = i.id + ":" + period;
+      String key = scopeKey(i.id) + ":" + period;
       String message = "";
       try {
         fetch(i, period);
@@ -104,20 +115,23 @@ public class MarketDataService {
               "message",
               message));
     }
-    if (failed) cooldown.put(i.id, System.currentTimeMillis() + 300000);
-    else cooldown.remove(i.id);
+    if (failed) cooldown.put(scopeKey(i.id), System.currentTimeMillis() + 300000);
+    else cooldown.remove(scopeKey(i.id));
   }
 
   public String chartWarning(Instrument i, String period) {
     // Weekly/monthly/yearly charts are aggregated from daily history.
     String sourcePeriod = period.equals("intraday") ? "intraday" : "day";
-    return historyErrors.getOrDefault(i.id + ":" + sourcePeriod, "");
+    return historyErrors.getOrDefault(scopeKey(i.id) + ":" + sourcePeriod, "");
   }
 
   @Scheduled(initialDelay = 10000, fixedDelayString = "${stocks.refresh-delay-ms:300000}")
   public void scheduled() {
     if (!enabled || closing) return;
-    for (Instrument i : db.instruments()) if (i.enabled) refresh(i);
+    db.scheduledScopes(
+        () -> {
+          for (Instrument i : db.instruments()) if (i.enabled) refresh(i);
+        });
   }
 
   public Map<String, Object> health(Instrument i) {
@@ -127,7 +141,7 @@ public class MarketDataService {
     long age = time == 0 ? 0 : Math.max(0, (System.currentTimeMillis() - time) / 1000);
     String message = errors.get(i.id);
     for (String period : Arrays.asList("day", "intraday")) {
-      String warning = historyErrors.get(i.id + ":" + period);
+      String warning = historyErrors.get(scopeKey(i.id) + ":" + period);
       if (warning != null) message = message == null ? warning : message + "；" + warning;
     }
     return map(
@@ -184,12 +198,14 @@ public class MarketDataService {
   }
 
   private void connect(Instrument i) {
-    if (closing || sockets.containsKey(i.id) || !i.enabled) return;
+    if (closing || sockets.containsKey(scopeKey(i.id)) || !i.enabled) return;
     Request req =
         new Request.Builder()
             .url("wss://finance-ws.pae.baidu.com/?finClientType=pc")
             .header("Origin", "https://finance.baidu.com")
             .build();
+    UserScope.Identity identity = UserScope.current();
+    String connectionKey = scopeKey(i.id);
     WebSocket ws =
         http.newWebSocket(
             req,
@@ -204,22 +220,22 @@ public class MarketDataService {
                   if (!"0".equals(root.path("resultCode").asText())) return;
                   JsonNode d = root.path("data");
                   if (d.isArray()) {
-                    for (JsonNode item : d) quote(i, item);
-                  } else quote(i, d);
+                    for (JsonNode item : d) UserScope.run(identity, () -> quote(i, item));
+                  } else UserScope.run(identity, () -> quote(i, d));
                 } catch (Exception ignored) {
                 }
               }
 
               public void onFailure(WebSocket w, Throwable t, Response r) {
-                sockets.remove(i.id);
-                errors.put(i.id, "实时连接中断，等待下一轮重连");
+                sockets.remove(connectionKey);
+                errors.put(connectionKey, "实时连接中断，等待下一轮重连");
               }
 
               public void onClosed(WebSocket w, int code, String reason) {
-                sockets.remove(i.id);
+                sockets.remove(connectionKey);
               }
             });
-    sockets.put(i.id, ws);
+    sockets.put(scopeKey(i.id), ws);
   }
 
   static Map<String, Object> subscription(Instrument i) {
@@ -283,7 +299,7 @@ public class MarketDataService {
             "tickTrades",
             QuoteParser.trades(d));
     db.saveQuote(i.id, quote);
-    errors.remove(i.id);
+    errors.remove(scopeKey(i.id));
     hub.emit("quote-update", quote);
     hub.emit("quote-detail-update", quote);
     hub.emit("quote-status", map("instrumentId", i.id, "state", "connected", "message", "已连接行情快照"));
@@ -464,7 +480,7 @@ public class MarketDataService {
   }
 
   public void stop(long id) {
-    WebSocket socket = sockets.remove(id);
+    WebSocket socket = sockets.remove(scopeKey(id));
     if (socket != null) socket.close(1000, "instrument disabled");
   }
 

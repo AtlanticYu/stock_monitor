@@ -9,3 +9,5 @@ data
 .vscode
 *.iml
 .DS_Store
+
+node_modules

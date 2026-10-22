@@ -1,0 +1,14 @@
+# Container deployment profile. Supply secrets through the runtime environment.
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: ${CONTEXT_PATH:/zhoubao}
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  security:
+    user:
+      name: ${APP_USERNAME:admin}
+      password: ${APP_PASSWORD}
